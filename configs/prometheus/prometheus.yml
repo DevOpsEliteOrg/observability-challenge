@@ -1,0 +1,52 @@
+# Prometheus Configuration for Jenkins Monitoring
+# Place this file at /etc/prometheus/prometheus.yml on the monitoring server
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'jenkins-observability'
+    environment: 'production'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - localhost:9093
+
+# Load alert rules
+rule_files:
+  - "alert_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # Jenkins metrics scraping
+  - job_name: 'jenkins'
+    metrics_path: '/prometheus'
+    static_configs:
+      - targets: ['JENKINS_PRIVATE_IP:8080']  # Replace with actual Jenkins IP
+        labels:
+          service: 'jenkins'
+          role: 'ci-cd'
+    # Scrape more frequently for CI/CD metrics
+    scrape_interval: 10s
+    scrape_timeout: 10s
+
+  # Additional Jenkins job-specific metrics (if using multiple Jenkins instances)
+  # - job_name: 'jenkins-production'
+  #   metrics_path: '/prometheus'
+  #   static_configs:
+  #     - targets: ['jenkins-prod:8080']
+
+# Remote write configuration (optional - for long-term storage)
+# remote_write:
+#   - url: "http://your-remote-storage:9090/api/v1/write"
+

@@ -1,0 +1,134 @@
+# OpenTelemetry Collector Configuration
+# Place this at /etc/otelcol/config.yaml on the monitoring server
+
+receivers:
+  # OTLP receiver for Jenkins OpenTelemetry plugin
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "*"
+
+  # Prometheus receiver (optional - can scrape Prometheus metrics)
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['localhost:8888']
+
+processors:
+  # Batch processor - batches telemetry data before sending
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # Resource processor - adds resource attributes
+  resource:
+    attributes:
+      - key: service.name
+        value: jenkins-ci
+        action: upsert
+      - key: environment
+        value: production
+        action: upsert
+      - key: deployment.environment
+        value: observability-challenge
+        action: upsert
+
+  # Attributes processor - manipulate span attributes
+  attributes:
+    actions:
+      - key: jenkins.job.name
+        action: insert
+        from_attribute: job_name
+      - key: jenkins.build.number
+        action: insert
+        from_attribute: build_number
+
+  # Span processor - filter or transform spans
+  span:
+    name:
+      # Rename spans for better readability
+      from_attributes: ["jenkins.stage.name"]
+      separator: "::"
+
+exporters:
+  # Export to Jaeger
+  jaeger:
+    endpoint: localhost:14250
+    tls:
+      insecure: true
+
+  # Logging exporter for debugging
+  logging:
+    verbosity: detailed
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+  # OTLP exporter (if you want to send to Grafana Tempo)
+  otlp/tempo:
+    endpoint: localhost:4317
+    tls:
+      insecure: true
+
+  # Prometheus exporter for trace metrics
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: otel
+    const_labels:
+      service: jenkins-traces
+
+extensions:
+  # Health check extension
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # PPRof extension for performance profiling
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  # ZPages extension for debugging
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+service:
+  extensions: [health_check, pprof, zpages]
+  
+  pipelines:
+    # Traces pipeline
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource, attributes, span]
+      exporters: [jaeger, logging]
+
+    # Metrics pipeline (for trace-derived metrics)
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, batch, resource]
+      exporters: [prometheus, logging]
+
+    # Logs pipeline (if Jenkins sends logs via OTLP)
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [logging]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+

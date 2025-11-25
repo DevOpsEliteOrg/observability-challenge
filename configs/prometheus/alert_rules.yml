@@ -1,0 +1,119 @@
+# Prometheus Alert Rules for Jenkins Observability Challenge
+# Place this file at /etc/prometheus/alert_rules.yml
+
+groups:
+  - name: jenkins_alerts
+    interval: 30s
+    rules:
+      # Alert 1: Slow Build
+      - alert: JenkinsSlowBuild
+        expr: jenkins_job_last_build_duration_seconds > 300
+        for: 1m
+        labels:
+          severity: warning
+          component: jenkins
+          alert_type: performance
+        annotations:
+          summary: "Jenkins build taking too long"
+          description: "Job {{ $labels.jenkins_job }} took {{ $value }} seconds to complete (threshold: 300s)"
+          dashboard: "http://grafana:3000/d/jenkins-overview"
+          runbook: "https://runbooks.example.com/jenkins-slow-build"
+
+      # Alert 2: Build Failure Spike
+      - alert: JenkinsBuildFailureSpike
+        expr: increase(jenkins_job_builds_failure_total[5m]) > 1
+        for: 2m
+        labels:
+          severity: critical
+          component: jenkins
+          alert_type: failure
+        annotations:
+          summary: "High rate of Jenkins build failures"
+          description: "Job {{ $labels.jenkins_job }} has {{ $value }} failures in the last 5 minutes"
+          dashboard: "http://grafana:3000/d/jenkins-overview"
+          runbook: "https://runbooks.example.com/jenkins-failure-spike"
+
+      # Alert 3: Executor Saturation
+      - alert: JenkinsExecutorSaturation
+        expr: (jenkins_executor_busy / jenkins_executor_count) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: jenkins
+          alert_type: capacity
+        annotations:
+          summary: "Jenkins executors are saturated"
+          description: "{{ $value | humanizePercentage }} of Jenkins executors are busy"
+          dashboard: "http://grafana:3000/d/jenkins-overview"
+          runbook: "https://runbooks.example.com/jenkins-executor-saturation"
+
+      # Alert 4: Queue Backlog
+      - alert: JenkinsQueueBacklog
+        expr: jenkins_queue_size > 5
+        for: 3m
+        labels:
+          severity: warning
+          component: jenkins
+          alert_type: capacity
+        annotations:
+          summary: "Jenkins build queue is backing up"
+          description: "{{ $value }} jobs are waiting in the Jenkins queue"
+          dashboard: "http://grafana:3000/d/jenkins-overview"
+          runbook: "https://runbooks.example.com/jenkins-queue-backlog"
+
+      # Additional Alert: Jenkins Down
+      - alert: JenkinsDown
+        expr: up{job="jenkins"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: jenkins
+          alert_type: availability
+        annotations:
+          summary: "Jenkins is down"
+          description: "Jenkins instance {{ $labels.instance }} is not responding"
+          dashboard: "http://grafana:3000/d/jenkins-overview"
+          runbook: "https://runbooks.example.com/jenkins-down"
+
+      # Additional Alert: High Build Queue Wait Time
+      - alert: JenkinsHighQueueWaitTime
+        expr: jenkins_queue_waiting > 60
+        for: 5m
+        labels:
+          severity: warning
+          component: jenkins
+          alert_type: performance
+        annotations:
+          summary: "Jobs waiting too long in queue"
+          description: "Jobs are waiting {{ $value }} seconds in the Jenkins queue"
+          dashboard: "http://grafana:3000/d/jenkins-overview"
+          runbook: "https://runbooks.example.com/jenkins-queue-wait"
+
+      # Additional Alert: Unstable Builds
+      - alert: JenkinsUnstableBuilds
+        expr: rate(jenkins_job_builds_unstable_total[5m]) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+          component: jenkins
+          alert_type: quality
+        annotations:
+          summary: "High rate of unstable Jenkins builds"
+          description: "Job {{ $labels.jenkins_job }} has unstable builds at rate {{ $value }}"
+          dashboard: "http://grafana:3000/d/jenkins-overview"
+          runbook: "https://runbooks.example.com/jenkins-unstable-builds"
+
+      # Additional Alert: Disk Space Low (if enabled)
+      - alert: JenkinsLowDiskSpace
+        expr: jenkins_node_disk_space_available_bytes / jenkins_node_disk_space_total_bytes < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: jenkins
+          alert_type: infrastructure
+        annotations:
+          summary: "Jenkins node disk space critically low"
+          description: "Node {{ $labels.node_name }} has less than 10% disk space available"
+          dashboard: "http://grafana:3000/d/jenkins-overview"
+          runbook: "https://runbooks.example.com/jenkins-disk-space"
+
